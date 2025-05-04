@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>엑셀 다운로드</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #4A90E2;
+      --secondary: #50E3C2;
+      --bg: #F5F7FA;
+      --card-bg: #FFFFFF;
+      --shadow: rgba(0, 0, 0, 0.1);
+      --radius: 12px;
+      --font: 'Nanum Gothic', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background-color: var(--bg);
+      color: #374151;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+    .card {
+      background-color: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: 0 4px 12px var(--shadow);
+      padding: 2rem;
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+    }
+    h2 {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: var(--primary);
+    }
+    label { display: block; text-align: left; margin-top: 1rem; font-weight: 700; }
+    input { width: 100%; padding: 0.75rem; margin-top: 0.5rem; border: 1px solid #D1D5DB;
+      border-radius: var(--radius); font-size: 1rem; transition: border-color 0.2s; }
+    input:focus { outline: none; border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2); }
+    .error { color: #E53E3E; margin-top: 0.5rem; font-size: 0.875rem; text-align: left; }
+    button { width: 100%; padding: 0.75rem; margin-top: 1.5rem; font-size: 1rem; color: #FFF;
+      background: linear-gradient(90deg, var(--primary), var(--secondary)); border: none;
+      border-radius: var(--radius); cursor: pointer; transition: background 0.3s;
+      box-shadow: 0 4px 8px var(--shadow); }
+    button:hover { background: linear-gradient(90deg, var(--secondary), var(--primary)); }
+    @media (max-width: 480px) { .card { padding: 1.5rem; } h2 { font-size: 1.25rem; }
+      input, button { font-size: 0.95rem; } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>검사기점검이력 엑셀 다운로드</h2>
+    <label for="startNum">시작일 (YYYYMMDD):</label>
+    <input type="text" id="startNum" placeholder="예: 20250101" maxlength="8">
+    <label for="endNum">종료일 (YYYYMMDD):</label>
+    <input type="text" id="endNum" placeholder="예: 20250228" maxlength="8">
+    <div class="error" id="err"></div>
+    <button id="download">다운로드</button>
+  </div>
+  <script>
+    const SHEET_ID = '1BNQetsALRy1HeuE6CrjdUwal0xaRVt2B7B62ZqG3cXU';
+    const GID = '0';
+    document.getElementById('download').addEventListener('click', () => {
+      const errDiv = document.getElementById('err');
+      errDiv.textContent = '';
+      const s8 = document.getElementById('startNum').value.trim();
+      const e8 = document.getElementById('endNum').value.trim();
+
+      if (!/^\d{8}$/.test(s8) || !/^\d{8}$/.test(e8)) {
+        errDiv.textContent = '날짜를 8자리 숫자(YYYYMMDD)로 입력하세요.';
+        return;
+      }
+
+      const pw = prompt('비밀번호를 입력하세요:');
+      if (pw !== '2468') {
+        alert('비밀번호가 올바르지 않습니다.');
+        return;
+      }
+
+      window.fileNameS = s8;
+      window.fileNameE = e8;
+      const startDate = `${s8.slice(0,4)}-${s8.slice(4,6)}-${s8.slice(6,8)}`;
+      const endDate   = `${e8.slice(0,4)}-${e8.slice(4,6)}-${e8.slice(6,8)}`;
+      const tqx = `out:json;responseHandler:processData`;
+      const tq  = `select A,B,C,D,E,F,G,H,I,J,K,L,M,N where A >= date '${startDate}' and A <= date '${endDate}'`;
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${GID}` +
+                  `&tqx=${encodeURIComponent(tqx)}&tq=${encodeURIComponent(tq)}`;
+
+      if (window.lastScript) document.body.removeChild(window.lastScript);
+      const script = document.createElement('script');
+      script.src = url;
+      window.lastScript = script;
+      document.body.appendChild(script);
+    });
+
+    function processData(resp) {
+      try {
+        const table = resp.table;
+        const header = table.cols.map(c => c.label || c.id);
+        const rows = table.rows.map(r =>
+          r.c.map(cell => (cell ? cell.f || cell.formattedValue || cell.v : null))
+        );
+
+        const searchMonth = window.fileNameS.slice(0, 6);
+        const title = `■ 검사기 일상점검 이력(${searchMonth})`;
+        const fullData = [[title], header, ...rows];
+
+        const ws = XLSX.utils.aoa_to_sheet(fullData);
+
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+        XLSX.writeFile(wb, `data_${window.fileNameS}_${window.fileNameE}.xlsx`);
+      } catch (err) {
+        console.error(err);
+        document.getElementById('err').textContent = '데이터 처리 중 오류가 발생했습니다.';
+      }
+    }
+  </script>
+</body>
+</html>
